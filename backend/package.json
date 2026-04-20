@@ -1,0 +1,35 @@
+{
+  "name": "backend-autecno",
+  "version": "1.0.0",
+  "description": "O projeto consiste em desenvolver uma plataforma web simples para auxiliar alunos em processo de habilitação. O sistema permitirá que alunos assistam aulas teóricas de legislação, encontrem instrutores autônomos cadastrados na plataforma e realizem o agendamento de aulas práticas e façam treinamento da prova teórica no site.",
+  "main": "src/server.ts",
+  "scripts": {
+    "dev": "nodemon --watch src --ext ts --exec ts-node src/server.ts",
+    "start": "ts-node src/server.ts",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/igorfortunatobr/trabalho-projeto-integrador.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/igorfortunatobr/trabalho-projeto-integrador/issues"
+  },
+  "homepage": "https://github.com/igorfortunatobr/trabalho-projeto-integrador#readme",
+  "dependencies": {
+    "@fastify/cors": "^11.2.0",
+    "bullmq": "^5.75.2",
+    "dotenv": "^17.4.2",
+    "fastify": "^5.8.5",
+    "ioredis": "^5.10.1",
+    "mysql2": "^3.22.1"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "nodemon": "^3.1.14",
+    "ts-node": "^10.9.2",
+    "typescript": "^6.0.3"
+  }
+}
