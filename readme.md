@@ -1,32 +1,46 @@
-O projeto consiste em desenvolver uma plataforma web simples para auxiliar alunos em processo de habilitação. O sistema permitirá que alunos assistam aulas teóricas de legislação, encontrem instrutores autônomos cadastrados na plataforma e realizem o agendamento de aulas práticas e façam treinamento da prova teórica no site.
+# Autecno - Plataforma de Autoescola
 
-Frontend:
+O projeto consiste em desenvolver uma plataforma web simples para auxiliar alunos em processo de habilitação. O sistema permitirá que alunos assistam aulas teóricas de legislação, encontrem instrutores autônomos cadastrados na plataforma, realizem o agendamento de aulas práticas e façam treinamento da prova teórica no site.
 
-Next.js: desenvolvimento da interface web do sistema.
+## Diferenciais
 
-Backend:
+O projeto foi dividido em dois sub-projetos: Frontend (Next.js) e Backend (Node.js/Fastify) e conta com containerização pronta.
 
-Node.js: ambiente de execução do servidor.
-Fastify: framework para criação da API e gerenciamento das rotas.
+## Tecnologias
 
-Banco de dados:
+### Frontend:
+- **Next.js**: Interface web moderna construída com React e TypeScript.
 
-MySQL: armazenamento de usuários, instrutores, aulas e agendamentos.
+### Backend:
+- **Node.js**: Execução.
+- **Fastify**: Framework eficiente e de alta performance.
 
-Autenticação:
+### Banco de dados / Serviços
+- **MySQL**: Armazenamento de dados do sistema.
+- **Redis + BullMQ**: Mensageria (preparado).
+- **Docker**: Containerização com Docker Compose.
 
-JWT (JSON Web Token): autenticação e controle de acesso dos usuários.
+---
 
-Mensageria / filas:
+## Como executar (Localmente)
 
-Redis + BullMQ: envio assíncrono de notificações e lembretes de aulas agendadas.
+Certifique-se de que possui o **Docker** e o **Docker Compose** instalados na sua máquina.
 
-Containerização:
+1. Faça uma cópia do arquivo de configuração de variáveis de ambiente:
+   (No Linux/Mac) `cp .env.example .env` ou crie o `.env` copiando o conteúdo no Windows.
+   
+2. Execute o orquestrador para construir as imagens e iniciar os serviços:
+   ```bash
+   docker-compose up --build -d
+   ```
 
-Docker: padronização e execução dos serviços do sistema em containers
+3. Acesse:
+   - **Frontend**: http://localhost:3000
+   - **Backend API**: http://localhost:3333/health
 
-GRUPO:
+---
 
-Igor Abreu Fortunato
-Pedro Henrique Santana Quintiliano
-Marcos Vinicius Paiva Carvalhar
+**GRUPO**:
+- Igor Abreu Fortunato
+- Pedro Henrique Santana Quintiliano
+- Marcos Vinicius Paiva Carvalhar

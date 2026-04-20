@@ -9,3 +9,5 @@ dist/
 coverage/
 *.log
 .DS_Store
+frontend/CLAUDE.md
+frontend/AGENTS.md

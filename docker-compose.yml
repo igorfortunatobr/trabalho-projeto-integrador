@@ -1,0 +1,76 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: autecno_backend
+    ports:
+      - "3333:3333"
+    environment:
+      - PORT=3333
+      - DB_HOST=mysql
+      - DB_USER=root
+      - DB_PASSWORD=root
+      - DB_NAME=autecno
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - JWT_SECRET=supersecretjwt
+    depends_on:
+      - mysql
+      - redis
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    networks:
+      - autecno_network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: autecno_frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:3333
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    networks:
+      - autecno_network
+
+  mysql:
+    image: mysql:8.0
+    container_name: autecno_mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=root
+      - MYSQL_DATABASE=autecno
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - autecno_network
+
+  redis:
+    image: redis:7
+    container_name: autecno_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - autecno_network
+
+volumes:
+  mysql_data:
+  redis_data:
+
+networks:
+  autecno_network:
+    driver: bridge
