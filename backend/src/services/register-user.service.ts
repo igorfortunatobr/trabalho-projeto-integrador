@@ -12,6 +12,7 @@ export type RegisterUserInput = {
 };
 
 export class ValidationError extends Error {}
+export class DuplicateEmailError extends Error {}
 
 export async function registerUser(
   input: RegisterUserInput,
@@ -19,9 +20,16 @@ export async function registerUser(
 ): Promise<User> {
   validateRegisterUserInput(input);
 
+  const normalizedEmail = input.email!.trim().toLowerCase();
+  const existingUser = await userRepository.findByEmail(normalizedEmail);
+
+  if (existingUser) {
+    throw new DuplicateEmailError('Email already registered.');
+  }
+
   const userData: CreateUserData = {
     name: input.name!.trim(),
-    email: input.email!.trim().toLowerCase(),
+    email: normalizedEmail,
     passwordHash: hashPassword(input.password!),
   };
 
