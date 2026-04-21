@@ -1,3 +1,4 @@
+import { randomBytes, scryptSync } from 'node:crypto';
 import {
   CreateUserData,
   User,
@@ -21,7 +22,7 @@ export async function registerUser(
   const userData: CreateUserData = {
     name: input.name!.trim(),
     email: input.email!.trim().toLowerCase(),
-    passwordHash: input.password!,
+    passwordHash: hashPassword(input.password!),
   };
 
   return userRepository.create(userData);
@@ -39,4 +40,11 @@ export function validateRegisterUserInput(input: RegisterUserInput) {
   if (!input.password?.trim()) {
     throw new ValidationError('Password is required.');
   }
+}
+
+export function hashPassword(password: string) {
+  const salt = randomBytes(16).toString('hex');
+  const hashedPassword = scryptSync(password, salt, 64).toString('hex');
+
+  return `${salt}:${hashedPassword}`;
 }
