@@ -43,7 +43,7 @@ async function start() {
     await fastify.listen({ port: PORT, host: '0.0.0.0' });
     fastify.log.info(`Server listening on http://0.0.0.0:${PORT}`);
   } catch (err) {
-    fastify.log.error(err);
+    console.error(err);
     process.exit(1);
   }
 }
