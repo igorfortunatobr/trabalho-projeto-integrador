@@ -4,8 +4,8 @@
   "description": "O projeto consiste em desenvolver uma plataforma web simples para auxiliar alunos em processo de habilitação. O sistema permitirá que alunos assistam aulas teóricas de legislação, encontrem instrutores autônomos cadastrados na plataforma e realizem o agendamento de aulas práticas e façam treinamento da prova teórica no site.",
   "main": "src/server.ts",
   "scripts": {
-    "dev": "nodemon --watch src --ext ts --exec ts-node src/server.ts",
-    "start": "ts-node src/server.ts",
+    "dev": "nodemon --watch src --ext ts --exec ts-node --files src/server.ts",
+    "start": "ts-node --files src/server.ts",
     "test": "node --require ts-node/register --test src/routes/*.test.ts"
   },
   "repository": {
