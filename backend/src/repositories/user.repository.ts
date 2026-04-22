@@ -61,7 +61,13 @@ export class MySqlUserRepository implements UserRepository {
       [result.insertId],
     );
 
-    return mapUserRow(rows[0]);
+    const createdUser = rows[0];
+
+    if (!createdUser) {
+      throw new Error('Failed to retrieve created user.');
+    }
+
+    return mapUserRow(createdUser);
   }
 
   async findByEmail(email: string): Promise<User | null> {
