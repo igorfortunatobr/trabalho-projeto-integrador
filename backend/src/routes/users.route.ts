@@ -1,5 +1,9 @@
 import { FastifyInstance } from 'fastify';
-import { CreateUserData, UserRepository } from '../repositories/user.repository';
+import { UserRepository } from '../repositories/user.repository';
+import {
+  registerUser,
+  ValidationError,
+} from '../services/register-user.service';
 
 type RegisterUserRoutesOptions = {
   userRepository: UserRepository;
@@ -16,21 +20,26 @@ export async function registerUserRoutes(
   options: RegisterUserRoutesOptions,
 ) {
   fastify.post<{ Body: CreateUserBody }>('/users', async (request, reply) => {
-    const body = request.body ?? {};
+    try {
+      const createdUser = await registerUser(
+        request.body ?? {},
+        options.userRepository,
+      );
 
-    const userData: CreateUserData = {
-      name: body.name ?? '',
-      email: body.email ?? '',
-      passwordHash: body.password ?? '',
-    };
+      return reply.status(201).send({
+        id: createdUser.id,
+        name: createdUser.name,
+        email: createdUser.email,
+        createdAt: createdUser.createdAt,
+      });
+    } catch (error) {
+      if (error instanceof ValidationError) {
+        return reply.status(400).send({
+          message: error.message,
+        });
+      }
 
-    const createdUser = await options.userRepository.create(userData);
-
-    return reply.status(201).send({
-      id: createdUser.id,
-      name: createdUser.name,
-      email: createdUser.email,
-      createdAt: createdUser.createdAt,
-    });
+      throw error;
+    }
   });
 }
