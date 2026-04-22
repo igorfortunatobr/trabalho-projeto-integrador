@@ -1,9 +1,9 @@
-import { randomBytes, scryptSync } from 'node:crypto';
 import {
   CreateUserData,
   User,
   UserRepository,
 } from '../repositories/user.repository';
+import { hashPassword } from './password.service';
 
 export type RegisterUserInput = {
   name?: string;
@@ -48,11 +48,4 @@ export function validateRegisterUserInput(input: RegisterUserInput) {
   if (!input.password?.trim()) {
     throw new ValidationError('Password is required.');
   }
-}
-
-export function hashPassword(password: string) {
-  const salt = randomBytes(16).toString('hex');
-  const hashedPassword = scryptSync(password, salt, 64).toString('hex');
-
-  return `${salt}:${hashedPassword}`;
 }
