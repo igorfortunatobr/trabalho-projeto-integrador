@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "nodemon --watch src --ext ts --exec ts-node src/server.ts",
     "start": "ts-node src/server.ts",
-    "test": "node --require ts-node/register --test src/routes/users.route.test.ts"
+    "test": "node --require ts-node/register --test src/routes/*.test.ts"
   },
   "repository": {
     "type": "git",
