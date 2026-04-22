@@ -40,6 +40,9 @@ Certifique-se de que possui o **Docker** e o **Docker Compose** instalados na su
 
 ---
 
+### Link do GitHub Projects:
+   - https://github.com/users/igorfortunatobr/projects/2
+
 **GRUPO**:
 - Igor Abreu Fortunato
 - Pedro Henrique Santana Quintiliano
