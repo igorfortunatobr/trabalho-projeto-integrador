@@ -16,6 +16,7 @@ export interface CreateUserData {
 
 export interface UserRepository {
   create(data: CreateUserData): Promise<User>;
+  findByEmail(email: string): Promise<User | null>;
 }
 
 type UserRow = RowDataPacket & {
@@ -61,6 +62,21 @@ export class MySqlUserRepository implements UserRepository {
     );
 
     return mapUserRow(rows[0]);
+  }
+
+  async findByEmail(email: string): Promise<User | null> {
+    const [rows] = await this.pool.execute<UserRow[]>(
+      `
+        SELECT id, name, email, password_hash, created_at
+        FROM users
+        WHERE email = ?
+        LIMIT 1
+      `,
+      [email],
+    );
+
+    const user = rows[0];
+    return user ? mapUserRow(user) : null;
   }
 }
 

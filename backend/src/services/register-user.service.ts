@@ -1,3 +1,4 @@
+import { randomBytes, scryptSync } from 'node:crypto';
 import {
   CreateUserData,
   User,
@@ -11,6 +12,7 @@ export type RegisterUserInput = {
 };
 
 export class ValidationError extends Error {}
+export class DuplicateEmailError extends Error {}
 
 export async function registerUser(
   input: RegisterUserInput,
@@ -18,10 +20,17 @@ export async function registerUser(
 ): Promise<User> {
   validateRegisterUserInput(input);
 
+  const normalizedEmail = input.email!.trim().toLowerCase();
+  const existingUser = await userRepository.findByEmail(normalizedEmail);
+
+  if (existingUser) {
+    throw new DuplicateEmailError('Email already registered.');
+  }
+
   const userData: CreateUserData = {
     name: input.name!.trim(),
-    email: input.email!.trim().toLowerCase(),
-    passwordHash: input.password!,
+    email: normalizedEmail,
+    passwordHash: hashPassword(input.password!),
   };
 
   return userRepository.create(userData);
@@ -39,4 +48,11 @@ export function validateRegisterUserInput(input: RegisterUserInput) {
   if (!input.password?.trim()) {
     throw new ValidationError('Password is required.');
   }
+}
+
+export function hashPassword(password: string) {
+  const salt = randomBytes(16).toString('hex');
+  const hashedPassword = scryptSync(password, salt, 64).toString('hex');
+
+  return `${salt}:${hashedPassword}`;
 }

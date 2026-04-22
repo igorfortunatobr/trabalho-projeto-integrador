@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { UserRepository } from '../repositories/user.repository';
 import {
+  DuplicateEmailError,
   registerUser,
   ValidationError,
 } from '../services/register-user.service';
@@ -35,6 +36,12 @@ export async function registerUserRoutes(
     } catch (error) {
       if (error instanceof ValidationError) {
         return reply.status(400).send({
+          message: error.message,
+        });
+      }
+
+      if (error instanceof DuplicateEmailError) {
+        return reply.status(409).send({
           message: error.message,
         });
       }
