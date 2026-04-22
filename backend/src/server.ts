@@ -1,24 +1,13 @@
-import Fastify from 'fastify';
-import cors from '@fastify/cors';
 import dotenv from 'dotenv';
 import mysql from 'mysql2/promise';
 import { Redis } from 'ioredis';
-import { registerHealthRoutes } from './routes/health.route';
+import { buildApp } from './app';
+import { MySqlUserRepository } from './repositories/user.repository';
 
 dotenv.config();
 
-const fastify = Fastify({ logger: true });
-
 // Variables
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3333;
-
-// Configure CORS
-fastify.register(cors, {
-  origin: '*',
-});
-
-// Register routes
-registerHealthRoutes(fastify);
 
 // Prepare connections (Optional check on boot)
 async function start() {
@@ -29,10 +18,6 @@ async function start() {
       port: process.env.REDIS_PORT ? parseInt(process.env.REDIS_PORT) : 6379,
     });
     
-    redis.on('connect', () => {
-      fastify.log.info('Redis connected (preparado)');
-    });
-
     // Basic MySQL connection test
     const mysqlPool = mysql.createPool({
       host: process.env.DB_HOST || 'localhost',
@@ -42,6 +27,17 @@ async function start() {
     });
 
     await mysqlPool.query('SELECT 1');
+    const userRepository = new MySqlUserRepository(mysqlPool);
+    await userRepository.ensureSchema();
+
+    const fastify = await buildApp({
+      userRepository,
+    });
+
+    redis.on('connect', () => {
+      fastify.log.info('Redis connected (preparado)');
+    });
+
     fastify.log.info('MySQL connected (preparado)');
 
     await fastify.listen({ port: PORT, host: '0.0.0.0' });
