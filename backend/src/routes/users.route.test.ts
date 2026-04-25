@@ -198,3 +198,81 @@ test('GET /profile requires authentication', async () => {
 
   await app.close();
 });
+
+test('GET /instructors returns available instructors for authenticated users', async () => {
+  const userRepository = new InMemoryUserRepository();
+  await userRepository.create({
+    name: 'Ana Instrutora',
+    email: 'ana@example.com',
+    passwordHash: hashPassword('123456'),
+    role: 'instructor',
+  });
+  await userRepository.create({
+    name: 'Bruno Instrutor',
+    email: 'bruno@example.com',
+    passwordHash: hashPassword('123456'),
+    role: 'instructor',
+  });
+  await userRepository.create({
+    name: 'Carlos Aluno',
+    email: 'carlos@example.com',
+    passwordHash: hashPassword('123456'),
+    role: 'student',
+  });
+
+  const app = await buildApp({
+    userRepository,
+    jwtSecret: 'test-secret',
+  });
+
+  const loginResponse = await app.inject({
+    method: 'POST',
+    url: '/auth/login',
+    payload: {
+      email: 'carlos@example.com',
+      password: '123456',
+    },
+  });
+
+  const response = await app.inject({
+    method: 'GET',
+    url: '/instructors',
+    headers: {
+      authorization: `Bearer ${loginResponse.json().token}`,
+    },
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.json(), [
+    {
+      id: 1,
+      name: 'Ana Instrutora',
+    },
+    {
+      id: 2,
+      name: 'Bruno Instrutor',
+    },
+  ]);
+
+  await app.close();
+});
+
+test('GET /instructors requires authentication', async () => {
+  const userRepository = new InMemoryUserRepository();
+  const app = await buildApp({
+    userRepository,
+    jwtSecret: 'test-secret',
+  });
+
+  const response = await app.inject({
+    method: 'GET',
+    url: '/instructors',
+  });
+
+  assert.equal(response.statusCode, 401);
+  assert.deepEqual(response.json(), {
+    message: 'Unauthorized.',
+  });
+
+  await app.close();
+});
