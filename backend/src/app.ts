@@ -2,6 +2,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import { registerAuthRoutes } from './routes/auth.route';
 import { registerHealthRoutes } from './routes/health.route';
+import { registerInstructorRoutes } from './routes/instructors.route';
 import { registerProfileRoutes } from './routes/profile.route';
 import { registerUserRoutes } from './routes/users.route';
 import { UserRepository } from './repositories/user.repository';
@@ -26,6 +27,10 @@ export async function buildApp(options: BuildAppOptions) {
   });
   await registerProfileRoutes(fastify, {
     jwtSecret,
+  });
+  await registerInstructorRoutes(fastify, {
+    jwtSecret,
+    userRepository: options.userRepository,
   });
   await registerUserRoutes(fastify, {
     userRepository: options.userRepository,

@@ -31,6 +31,15 @@ class InMemoryUserRepository implements UserRepository {
     return this.users.find((user) => user.email === email) ?? null;
   }
 
+  async listInstructors() {
+    return this.users
+      .filter((user) => user.role === 'instructor')
+      .map((user) => ({
+        id: user.id,
+        name: user.name,
+      }));
+  }
+
   list() {
     return this.users;
   }

@@ -16,9 +16,15 @@ export interface CreateUserData {
   role: 'student' | 'instructor';
 }
 
+export interface InstructorListItem {
+  id: number;
+  name: string;
+}
+
 export interface UserRepository {
   create(data: CreateUserData): Promise<User>;
   findByEmail(email: string): Promise<User | null>;
+  listInstructors(): Promise<InstructorListItem[]>;
 }
 
 type UserRow = RowDataPacket & {
@@ -105,6 +111,22 @@ export class MySqlUserRepository implements UserRepository {
 
     const user = rows[0];
     return user ? mapUserRow(user) : null;
+  }
+
+  async listInstructors(): Promise<InstructorListItem[]> {
+    const [rows] = await this.pool.execute<UserRow[]>(
+      `
+        SELECT id, name, email, password_hash, discriminator, created_at
+        FROM users
+        WHERE discriminator = 'instructor'
+        ORDER BY name ASC
+      `,
+    );
+
+    return rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+    }));
   }
 }
 
