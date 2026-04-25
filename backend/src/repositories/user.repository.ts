@@ -5,6 +5,7 @@ export interface User {
   name: string;
   email: string;
   passwordHash: string;
+  role: 'student' | 'instructor';
   createdAt: Date;
 }
 
@@ -12,6 +13,7 @@ export interface CreateUserData {
   name: string;
   email: string;
   passwordHash: string;
+  role: 'student' | 'instructor';
 }
 
 export interface UserRepository {
@@ -24,6 +26,7 @@ type UserRow = RowDataPacket & {
   name: string;
   email: string;
   password_hash: string;
+  discriminator: 'student' | 'instructor';
   created_at: Date;
 };
 
@@ -37,24 +40,43 @@ export class MySqlUserRepository implements UserRepository {
         name VARCHAR(255) NOT NULL,
         email VARCHAR(255) NOT NULL,
         password_hash VARCHAR(255) NOT NULL,
+        discriminator VARCHAR(20) NOT NULL DEFAULT 'student',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE KEY unique_users_email (email)
       )
     `);
+
+    const [columns] = await this.pool.query<RowDataPacket[]>(
+      `
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = DATABASE()
+          AND table_name = 'users'
+          AND column_name = 'discriminator'
+        LIMIT 1
+      `,
+    );
+
+    if (columns.length === 0) {
+      await this.pool.query(`
+        ALTER TABLE users
+        ADD COLUMN discriminator VARCHAR(20) NOT NULL DEFAULT 'student'
+      `);
+    }
   }
 
   async create(data: CreateUserData): Promise<User> {
     const [result] = await this.pool.execute<ResultSetHeader>(
       `
-        INSERT INTO users (name, email, password_hash)
-        VALUES (?, ?, ?)
+        INSERT INTO users (name, email, password_hash, discriminator)
+        VALUES (?, ?, ?, ?)
       `,
-      [data.name, data.email, data.passwordHash],
+      [data.name, data.email, data.passwordHash, data.role],
     );
 
     const [rows] = await this.pool.execute<UserRow[]>(
       `
-        SELECT id, name, email, password_hash, created_at
+        SELECT id, name, email, password_hash, discriminator, created_at
         FROM users
         WHERE id = ?
       `,
@@ -73,7 +95,7 @@ export class MySqlUserRepository implements UserRepository {
   async findByEmail(email: string): Promise<User | null> {
     const [rows] = await this.pool.execute<UserRow[]>(
       `
-        SELECT id, name, email, password_hash, created_at
+        SELECT id, name, email, password_hash, discriminator, created_at
         FROM users
         WHERE email = ?
         LIMIT 1
@@ -92,6 +114,7 @@ function mapUserRow(row: UserRow): User {
     name: row.name,
     email: row.email,
     passwordHash: row.password_hash,
+    role: row.discriminator,
     createdAt: row.created_at,
   };
 }

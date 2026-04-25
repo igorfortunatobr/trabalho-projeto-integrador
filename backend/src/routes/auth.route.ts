@@ -33,6 +33,7 @@ export async function registerAuthRoutes(
           sub: String(user.id),
           name: user.name,
           email: user.email,
+          role: user.role,
         },
         options.jwtSecret,
       );

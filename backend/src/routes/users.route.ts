@@ -14,6 +14,7 @@ type CreateUserBody = {
   name?: string;
   email?: string;
   password?: string;
+  role?: 'student' | 'instructor';
 };
 
 export async function registerUserRoutes(
@@ -31,6 +32,7 @@ export async function registerUserRoutes(
         id: createdUser.id,
         name: createdUser.name,
         email: createdUser.email,
+        role: createdUser.role,
         createdAt: createdUser.createdAt,
       });
     } catch (error) {

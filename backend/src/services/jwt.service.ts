@@ -4,6 +4,7 @@ export type AuthTokenPayload = {
   sub: string;
   name: string;
   email: string;
+  role: 'student' | 'instructor';
   iat: number;
   exp: number;
 };

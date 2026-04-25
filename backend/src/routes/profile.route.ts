@@ -26,6 +26,7 @@ export async function registerProfileRoutes(
         id: Number(authenticatedRequest.user.sub),
         name: authenticatedRequest.user.name,
         email: authenticatedRequest.user.email,
+        role: authenticatedRequest.user.role,
       };
     },
   );

@@ -18,6 +18,7 @@ class InMemoryUserRepository implements UserRepository {
       name: data.name,
       email: data.email,
       passwordHash: data.passwordHash,
+      role: data.role,
       createdAt: new Date(),
     };
 
@@ -46,6 +47,7 @@ test('POST /users creates a new user successfully', async () => {
       name: 'Maria Silva',
       email: 'maria@example.com',
       password: '123456',
+      role: 'student',
     },
   });
 
@@ -54,10 +56,12 @@ test('POST /users creates a new user successfully', async () => {
   const body = response.json();
   assert.equal(body.name, 'Maria Silva');
   assert.equal(body.email, 'maria@example.com');
+  assert.equal(body.role, 'student');
 
   const [savedUser] = userRepository.list();
   assert.ok(savedUser);
   assert.notEqual(savedUser.passwordHash, '123456');
+  assert.equal(savedUser.role, 'student');
 
   await app.close();
 });
@@ -68,6 +72,7 @@ test('POST /users rejects duplicated email', async () => {
     name: 'Maria Silva',
     email: 'maria@example.com',
     passwordHash: 'already-hashed',
+    role: 'student',
   });
 
   const app = await buildApp({ userRepository });
@@ -79,6 +84,7 @@ test('POST /users rejects duplicated email', async () => {
       name: 'Outra Maria',
       email: 'maria@example.com',
       password: 'abcdef',
+      role: 'instructor',
     },
   });
 
@@ -96,6 +102,7 @@ test('POST /auth/login returns a JWT for valid credentials', async () => {
     name: 'Maria Silva',
     email: 'maria@example.com',
     passwordHash: hashPassword('123456'),
+    role: 'instructor',
   });
   const app = await buildApp({
     userRepository,
@@ -127,6 +134,7 @@ test('POST /auth/login returns a JWT for valid credentials', async () => {
     id: savedUser.id,
     name: savedUser.name,
     email: savedUser.email,
+    role: savedUser.role,
   });
 
   await app.close();
@@ -138,6 +146,7 @@ test('POST /auth/login rejects invalid credentials', async () => {
     name: 'Maria Silva',
     email: 'maria@example.com',
     passwordHash: hashPassword('123456'),
+    role: 'student',
   });
   const app = await buildApp({
     userRepository,
