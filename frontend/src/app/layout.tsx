@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Autecno | Cadastro de Alunos",
-  description: "Plataforma de autoescola com cadastro de alunos integrado ao backend.",
+  title: "Autecno",
+  description: "Plataforma de autoescola.",
 };
 
 export default function RootLayout({
