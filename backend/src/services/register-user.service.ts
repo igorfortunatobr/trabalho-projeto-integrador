@@ -9,6 +9,7 @@ export type RegisterUserInput = {
   name?: string;
   email?: string;
   password?: string;
+  role?: 'student' | 'instructor';
 };
 
 export class ValidationError extends Error {}
@@ -31,6 +32,7 @@ export async function registerUser(
     name: input.name!.trim(),
     email: normalizedEmail,
     passwordHash: hashPassword(input.password!),
+    role: input.role!,
   };
 
   return userRepository.create(userData);
@@ -47,5 +49,9 @@ export function validateRegisterUserInput(input: RegisterUserInput) {
 
   if (!input.password?.trim()) {
     throw new ValidationError('Password is required.');
+  }
+
+  if (input.role !== 'student' && input.role !== 'instructor') {
+    throw new ValidationError('Role must be student or instructor.');
   }
 }

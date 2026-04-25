@@ -12,6 +12,7 @@ type RegisterFormData = {
   name: string;
   email: string;
   password: string;
+  role: "student" | "instructor";
 };
 
 export function RegisterForm() {
@@ -20,6 +21,7 @@ export function RegisterForm() {
     name: "",
     email: "",
     password: "",
+    role: "student",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,7 +46,7 @@ export function RegisterForm() {
       }
 
       setSuccess("Cadastro realizado com sucesso. Você já pode entrar.");
-      setData({ name: "", email: "", password: "" });
+      setData({ name: "", email: "", password: "", role: "student" });
       setTimeout(() => router.push("/auth/login"), 700);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao cadastrar.");
@@ -103,6 +105,27 @@ export function RegisterForm() {
             placeholder="Crie uma senha"
             required
           />
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-slate-700" htmlFor="role">
+            Perfil
+          </label>
+          <select
+            id="role"
+            value={data.role}
+            onChange={(event) =>
+              setData((current) => ({
+                ...current,
+                role: event.target.value as RegisterFormData["role"],
+              }))
+            }
+            className="flex h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-[var(--brand-blue)] focus:ring-2 focus:ring-[color:color-mix(in_srgb,var(--brand-blue)_18%,white)]"
+            required
+          >
+            <option value="student">Aluno</option>
+            <option value="instructor">Instrutor</option>
+          </select>
         </div>
 
         {error && (
