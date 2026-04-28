@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { getApiUrl } from "@/lib/api";
 import { getStoredToken } from "@/lib/auth";
 
@@ -18,18 +20,49 @@ type Instructor = {
   name: string;
 };
 
+type AppointmentStatus =
+  | "pending"
+  | "confirmed"
+  | "cancelled"
+  | "rejected"
+  | "completed";
+
+type Appointment = {
+  id: number;
+  studentId: number;
+  studentName: string;
+  instructorId: number;
+  instructorName: string;
+  scheduledAt: string;
+  status: AppointmentStatus;
+  notes: string | null;
+  cancellationReason: string | null;
+};
+
+type AvailabilitySlot = {
+  scheduledAt: string;
+  available: boolean;
+};
+
 export default function DashboardPage() {
+  const token = getStoredToken();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [instructors, setInstructors] = useState<Instructor[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [isLoading, setIsLoading] = useState(Boolean(token));
+  const [error, setError] = useState<string | null>(
+    token ? null : "Sessão inválida. Faça login novamente.",
+  );
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
+
+  const [selectedInstructorId, setSelectedInstructorId] = useState<number | null>(null);
+  const [selectedDate, setSelectedDate] = useState("");
+  const [availabilitySlots, setAvailabilitySlots] = useState<AvailabilitySlot[]>([]);
+  const [selectedScheduledAt, setSelectedScheduledAt] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    const token = getStoredToken();
-
     if (!token) {
-      setIsLoading(false);
-      setError("Sessão inválida. Faça login novamente.");
       return;
     }
 
@@ -38,13 +71,19 @@ export default function DashboardPage() {
       setError(null);
 
       try {
-        const [profileResponse, instructorsResponse] = await Promise.all([
+        const [profileResponse, instructorsResponse, appointmentsResponse] =
+          await Promise.all([
           fetch(`${getApiUrl()}/profile`, {
             headers: {
               Authorization: `Bearer ${token}`,
             },
           }),
           fetch(`${getApiUrl()}/instructors`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }),
+          fetch(`${getApiUrl()}/appointments`, {
             headers: {
               Authorization: `Bearer ${token}`,
             },
@@ -68,6 +107,14 @@ export default function DashboardPage() {
         }
 
         setInstructors(instructorsPayload);
+
+        const appointmentsPayload = await appointmentsResponse.json();
+        if (!appointmentsResponse.ok) {
+          throw new Error(
+            appointmentsPayload.message || "Não foi possível listar os agendamentos.",
+          );
+        }
+        setAppointments(appointmentsPayload);
       } catch (err) {
         setError(
           err instanceof Error ? err.message : "Falha ao carregar os dados do dashboard.",
@@ -78,9 +125,144 @@ export default function DashboardPage() {
     };
 
     fetchDashboardData();
-  }, []);
+  }, [token]);
 
   const isStudent = profile?.role === "student";
+
+  const formatDateTime = (isoDate: string) =>
+    new Date(isoDate).toLocaleString("pt-BR", {
+      dateStyle: "short",
+      timeStyle: "short",
+    });
+
+  const statusLabel: Record<AppointmentStatus, string> = {
+    pending: "Pendente",
+    confirmed: "Confirmada",
+    cancelled: "Cancelada",
+    rejected: "Recusada",
+    completed: "Concluída",
+  };
+
+  const getStatusBadgeClass = (status: AppointmentStatus) => {
+    if (status === "confirmed" || status === "completed") {
+      return "border-emerald-200 bg-emerald-50 text-emerald-700";
+    }
+    if (status === "pending") {
+      return "border-amber-200 bg-amber-50 text-amber-700";
+    }
+    return "border-rose-200 bg-rose-50 text-rose-700";
+  };
+
+  const refreshAppointments = async () => {
+    if (!token) return;
+    const response = await fetch(`${getApiUrl()}/appointments`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.message || "Não foi possível atualizar agendamentos.");
+    }
+    setAppointments(payload);
+  };
+
+  const loadAvailability = async (instructorId: number, date: string) => {
+    if (!token) return;
+    setAvailabilitySlots([]);
+    setSelectedScheduledAt(null);
+
+    if (!date) return;
+
+    const response = await fetch(
+      `${getApiUrl()}/appointments/availability?instructorId=${instructorId}&date=${date}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    );
+    const payload = await response.json();
+
+    if (!response.ok) {
+      throw new Error(payload.message || "Não foi possível carregar horários.");
+    }
+
+    setAvailabilitySlots(payload.slots ?? []);
+  };
+
+  const handleScheduleAppointment = async () => {
+    if (!token || !selectedInstructorId || !selectedScheduledAt) {
+      setActionMessage("Selecione instrutor e horário para continuar.");
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      setActionMessage(null);
+
+      const response = await fetch(`${getApiUrl()}/appointments`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          instructorId: selectedInstructorId,
+          scheduledAt: selectedScheduledAt,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.message || "Não foi possível criar o agendamento.");
+      }
+
+      setActionMessage("Agendamento realizado com sucesso.");
+      await refreshAppointments();
+      if (selectedDate) {
+        await loadAvailability(selectedInstructorId, selectedDate);
+      }
+    } catch (err) {
+      setActionMessage(
+        err instanceof Error ? err.message : "Falha ao criar o agendamento.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleUpdateAppointmentStatus = async (
+    appointmentId: number,
+    status: AppointmentStatus,
+  ) => {
+    if (!token) return;
+
+    try {
+      setActionMessage(null);
+      const response = await fetch(
+        `${getApiUrl()}/appointments/${appointmentId}/status`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ status }),
+        },
+      );
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.message || "Não foi possível atualizar o status.");
+      }
+
+      setActionMessage("Status atualizado com sucesso.");
+      await refreshAppointments();
+    } catch (err) {
+      setActionMessage(
+        err instanceof Error ? err.message : "Falha ao atualizar status.",
+      );
+    }
+  };
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-6xl px-4 pb-10 pt-28">
@@ -89,39 +271,112 @@ export default function DashboardPage() {
           <Badge>Área privada</Badge>
           <div className="space-y-2">
             <h1 className="text-3xl font-bold text-[var(--brand-blue)]">
-              Dashboard inicial
+              {isStudent ? "Agendar Aula Prática" : "Minha Agenda"}
             </h1>
             <p className="text-sm leading-6 text-slate-600">
               {profile
-                ? `Olá, ${profile.name}. Este é o seu painel inicial na plataforma Autecno.`
+                ? `Olá, ${profile.name}. Gerencie seus agendamentos de aula por aqui.`
                 : "Carregando seu ambiente autenticado."}
             </p>
           </div>
         </Card>
 
-        <Card className="space-y-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+        {isStudent && (
+          <Card className="space-y-5">
             <div className="space-y-2">
-              <Badge>Instrutores disponíveis</Badge>
+              <Badge>Novo agendamento</Badge>
               <h2 className="text-2xl font-bold text-[var(--brand-blue)]">
-                Escolha quem pode acompanhar suas aulas
+                Escolha instrutor, data e horário
               </h2>
               <p className="text-sm leading-6 text-slate-600">
-                A lista abaixo mostra os instrutores cadastrados e disponíveis na
-                plataforma.
+                Selecione um instrutor e veja os horários livres para confirmar sua aula.
               </p>
             </div>
 
-            {profile && (
-              <span className="rounded-full border border-[var(--border-soft)] bg-slate-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">
-                Perfil: {profile.role === "student" ? "Aluno" : "Instrutor"}
-              </span>
-            )}
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-slate-700">Instrutor</label>
+                <select
+                  className="h-10 w-full rounded-md border border-[var(--border-soft)] bg-white px-3 text-sm"
+                  value={selectedInstructorId ?? ""}
+                  onChange={(event) => {
+                    const nextId = Number(event.target.value);
+                    setSelectedInstructorId(nextId || null);
+                    if (nextId && selectedDate) {
+                      void loadAvailability(nextId, selectedDate);
+                    } else {
+                      setAvailabilitySlots([]);
+                      setSelectedScheduledAt(null);
+                    }
+                  }}
+                >
+                  <option value="">Selecione...</option>
+                  {instructors.map((instructor) => (
+                    <option key={instructor.id} value={instructor.id}>
+                      {instructor.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-slate-700">Data da aula</label>
+                <Input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(event) => {
+                    const nextDate = event.target.value;
+                    setSelectedDate(nextDate);
+                    if (selectedInstructorId && nextDate) {
+                      void loadAvailability(selectedInstructorId, nextDate);
+                    } else {
+                      setAvailabilitySlots([]);
+                      setSelectedScheduledAt(null);
+                    }
+                  }}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <p className="text-sm font-semibold text-slate-700">Horários disponíveis</p>
+              <div className="flex flex-wrap gap-2">
+                {availabilitySlots.length === 0 && (
+                  <p className="text-sm text-slate-500">
+                    Selecione instrutor e data para listar horários.
+                  </p>
+                )}
+                {availabilitySlots.map((slot) => (
+                  <Button
+                    key={slot.scheduledAt}
+                    variant={selectedScheduledAt === slot.scheduledAt ? "default" : "outline"}
+                    disabled={!slot.available}
+                    onClick={() => setSelectedScheduledAt(slot.scheduledAt)}
+                  >
+                    {new Date(slot.scheduledAt).toLocaleTimeString("pt-BR", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            <Button onClick={handleScheduleAppointment} disabled={isSubmitting}>
+              {isSubmitting ? "Confirmando..." : "Confirmar agendamento"}
+            </Button>
+          </Card>
+        )}
+
+        <Card className="space-y-4">
+          <div className="space-y-2">
+            <Badge>{isStudent ? "Meus agendamentos" : "Agenda recebida"}</Badge>
+            <h2 className="text-2xl font-bold text-[var(--brand-blue)]">
+              {isStudent ? "Aulas que você solicitou" : "Aulas agendadas por alunos"}
+            </h2>
           </div>
 
-          {isLoading && (
-            <p className="text-sm text-slate-500">Carregando instrutores disponíveis...</p>
-          )}
+          {isLoading && <p className="text-sm text-slate-500">Carregando agendamentos...</p>}
 
           {error && (
             <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
@@ -129,32 +384,93 @@ export default function DashboardPage() {
             </p>
           )}
 
-          {!isLoading && !error && !isStudent && (
-            <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-              Esta listagem foi preparada para a experiência do aluno no dashboard.
+          {actionMessage && (
+            <p className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+              {actionMessage}
             </p>
           )}
 
-          {!isLoading && !error && isStudent && instructors.length === 0 && (
+          {!isLoading && !error && appointments.length === 0 && (
             <p className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-              Nenhum instrutor está disponível no momento.
+              Ainda não há agendamentos.
             </p>
           )}
 
-          {!isLoading && !error && isStudent && instructors.length > 0 && (
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {instructors.map((instructor) => (
+          {!isLoading && !error && appointments.length > 0 && (
+            <div className="grid gap-3">
+              {appointments.map((appointment) => (
                 <article
-                  key={instructor.id}
-                  className="rounded-2xl border border-[var(--border-soft)] bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(244,248,255,0.96))] p-5 shadow-[0_10px_30px_rgba(15,23,42,0.06)]"
+                  key={appointment.id}
+                  className="rounded-2xl border border-[var(--border-soft)] bg-white p-4"
                 >
-                  <Badge className="mb-4">Instrutor</Badge>
-                  <h3 className="text-lg font-bold text-[var(--brand-blue)]">
-                    {instructor.name}
-                  </h3>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">
-                    Disponível para ser escolhido pelo aluno na plataforma.
-                  </p>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold text-slate-900">
+                        {isStudent
+                          ? `Instrutor: ${appointment.instructorName}`
+                          : `Aluno: ${appointment.studentName}`}
+                      </p>
+                      <p className="text-sm text-slate-600">
+                        Data: {formatDateTime(appointment.scheduledAt)}
+                      </p>
+                    </div>
+                    <Badge className={getStatusBadgeClass(appointment.status)}>
+                      {statusLabel[appointment.status]}
+                    </Badge>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {isStudent && ["pending", "confirmed"].includes(appointment.status) && (
+                      <Button
+                        variant="outline"
+                        onClick={() =>
+                          void handleUpdateAppointmentStatus(appointment.id, "cancelled")
+                        }
+                      >
+                        Cancelar
+                      </Button>
+                    )}
+
+                    {!isStudent && appointment.status === "pending" && (
+                      <>
+                        <Button
+                          onClick={() =>
+                            void handleUpdateAppointmentStatus(appointment.id, "confirmed")
+                          }
+                        >
+                          Confirmar
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() =>
+                            void handleUpdateAppointmentStatus(appointment.id, "rejected")
+                          }
+                        >
+                          Recusar
+                        </Button>
+                      </>
+                    )}
+
+                    {!isStudent && appointment.status === "confirmed" && (
+                      <>
+                        <Button
+                          onClick={() =>
+                            void handleUpdateAppointmentStatus(appointment.id, "completed")
+                          }
+                        >
+                          Concluir
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() =>
+                            void handleUpdateAppointmentStatus(appointment.id, "cancelled")
+                          }
+                        >
+                          Cancelar
+                        </Button>
+                      </>
+                    )}
+                  </div>
                 </article>
               ))}
             </div>
