@@ -2,6 +2,7 @@ import dotenv from 'dotenv';
 import mysql from 'mysql2/promise';
 import { Redis } from 'ioredis';
 import { buildApp } from './app';
+import { MySqlAppointmentRepository } from './repositories/appointment.repository';
 import { MySqlUserRepository } from './repositories/user.repository';
 
 dotenv.config();
@@ -29,9 +30,12 @@ async function start() {
     await mysqlPool.query('SELECT 1');
     const userRepository = new MySqlUserRepository(mysqlPool);
     await userRepository.ensureSchema();
+    const appointmentRepository = new MySqlAppointmentRepository(mysqlPool);
+    await appointmentRepository.ensureSchema();
 
     const fastify = await buildApp({
       userRepository,
+      appointmentRepository,
     });
 
     redis.on('connect', () => {
