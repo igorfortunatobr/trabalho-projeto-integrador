@@ -21,7 +21,10 @@ export function buildAuthenticateRequest(options: AuthenticateRequestOptions) {
     const token = authorizationHeader.slice('Bearer '.length);
 
     try {
-      request.user = verifyToken(token, options.jwtSecret);
+      const authenticatedRequest = request as FastifyRequest & {
+        user: ReturnType<typeof verifyToken>;
+      };
+      authenticatedRequest.user = verifyToken(token, options.jwtSecret);
     } catch (error) {
       if (error instanceof InvalidTokenError) {
         return reply.status(401).send({
