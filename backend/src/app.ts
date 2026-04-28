@@ -21,6 +21,7 @@ export async function buildApp(options: BuildAppOptions) {
 
   await fastify.register(cors, {
     origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   });
 
   await registerHealthRoutes(fastify);
