@@ -2,6 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildApp } from '../app';
 import {
+  Appointment,
+  AppointmentRepository,
+  AppointmentStatus,
+  AppointmentWithNames,
+  CreateAppointmentData,
+  UpdateAppointmentStatusData,
+} from '../repositories/appointment.repository';
+import {
   CreateUserData,
   User,
   UserRepository,
@@ -31,6 +39,10 @@ class InMemoryUserRepository implements UserRepository {
     return this.users.find((user) => user.email === email) ?? null;
   }
 
+  async findById(id: number): Promise<User | null> {
+    return this.users.find((user) => user.id === id) ?? null;
+  }
+
   async listInstructors() {
     return this.users
       .filter((user) => user.role === 'instructor')
@@ -45,9 +57,128 @@ class InMemoryUserRepository implements UserRepository {
   }
 }
 
-test('POST /users creates a new user successfully', async () => {
+class InMemoryAppointmentRepository implements AppointmentRepository {
+  private appointments: Appointment[] = [];
+  private sequence = 1;
+
+  constructor(private readonly userRepository: InMemoryUserRepository) {}
+
+  async ensureSchema() {}
+
+  async create(data: CreateAppointmentData): Promise<Appointment> {
+    const now = new Date();
+    const appointment: Appointment = {
+      id: this.sequence++,
+      studentId: data.studentId,
+      instructorId: data.instructorId,
+      scheduledAt: data.scheduledAt,
+      status: 'pending',
+      notes: data.notes ?? null,
+      cancellationReason: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    this.appointments.push(appointment);
+    return appointment;
+  }
+
+  async findById(id: number): Promise<AppointmentWithNames | null> {
+    const appointment = this.appointments.find((item) => item.id === id);
+    if (!appointment) {
+      return null;
+    }
+
+    return this.mapWithNames(appointment);
+  }
+
+  async listByStudent(studentId: number): Promise<AppointmentWithNames[]> {
+    return this.appointments
+      .filter((appointment) => appointment.studentId === studentId)
+      .map((appointment) => this.mapWithNames(appointment));
+  }
+
+  async listByInstructor(instructorId: number): Promise<AppointmentWithNames[]> {
+    return this.appointments
+      .filter((appointment) => appointment.instructorId === instructorId)
+      .map((appointment) => this.mapWithNames(appointment));
+  }
+
+  async listForInstructorOnDate(
+    instructorId: number,
+    dateStart: Date,
+    dateEnd: Date,
+  ): Promise<Appointment[]> {
+    return this.appointments.filter(
+      (appointment) =>
+        appointment.instructorId === instructorId &&
+        appointment.scheduledAt >= dateStart &&
+        appointment.scheduledAt < dateEnd,
+    );
+  }
+
+  async hasConflict(instructorId: number, scheduledAt: Date): Promise<boolean> {
+    return this.appointments.some(
+      (appointment) =>
+        appointment.instructorId === instructorId &&
+        appointment.scheduledAt.getTime() === scheduledAt.getTime() &&
+        ['pending', 'confirmed'].includes(appointment.status),
+    );
+  }
+
+  async updateStatus(
+    id: number,
+    data: UpdateAppointmentStatusData,
+  ): Promise<AppointmentWithNames | null> {
+    const appointment = this.appointments.find((item) => item.id === id);
+    if (!appointment) {
+      return null;
+    }
+
+    appointment.status = data.status;
+    appointment.cancellationReason = data.cancellationReason ?? null;
+    appointment.updatedAt = new Date();
+
+    return this.mapWithNames(appointment);
+  }
+
+  private mapWithNames(appointment: Appointment): AppointmentWithNames {
+    const student = this.userRepository.list().find((u) => u.id === appointment.studentId);
+    const instructor = this.userRepository
+      .list()
+      .find((u) => u.id === appointment.instructorId);
+
+    return {
+      ...appointment,
+      studentName: student?.name ?? 'Aluno',
+      instructorName: instructor?.name ?? 'Instrutor',
+    };
+  }
+}
+
+async function createAppWithRepositories(options?: { jwtSecret?: string }) {
   const userRepository = new InMemoryUserRepository();
-  const app = await buildApp({ userRepository });
+  const appointmentRepository = new InMemoryAppointmentRepository(userRepository);
+  const appOptions =
+    options?.jwtSecret !== undefined
+      ? {
+          userRepository,
+          appointmentRepository,
+          jwtSecret: options.jwtSecret,
+        }
+      : {
+          userRepository,
+          appointmentRepository,
+        };
+  const app = await buildApp({
+    ...appOptions,
+  });
+
+  return { app, userRepository, appointmentRepository };
+}
+
+test('POST /users creates a new user successfully', async () => {
+  const { app, userRepository } = await createAppWithRepositories();
 
   const response = await app.inject({
     method: 'POST',
@@ -76,15 +207,13 @@ test('POST /users creates a new user successfully', async () => {
 });
 
 test('POST /users rejects duplicated email', async () => {
-  const userRepository = new InMemoryUserRepository();
+  const { app, userRepository } = await createAppWithRepositories();
   await userRepository.create({
     name: 'Maria Silva',
     email: 'maria@example.com',
     passwordHash: 'already-hashed',
     role: 'student',
   });
-
-  const app = await buildApp({ userRepository });
 
   const response = await app.inject({
     method: 'POST',
@@ -106,18 +235,15 @@ test('POST /users rejects duplicated email', async () => {
 });
 
 test('POST /auth/login returns a JWT for valid credentials', async () => {
-  const userRepository = new InMemoryUserRepository();
+  const { app, userRepository } = await createAppWithRepositories({
+    jwtSecret: 'test-secret',
+  });
   const savedUser = await userRepository.create({
     name: 'Maria Silva',
     email: 'maria@example.com',
     passwordHash: hashPassword('123456'),
     role: 'instructor',
   });
-  const app = await buildApp({
-    userRepository,
-    jwtSecret: 'test-secret',
-  });
-
   const loginResponse = await app.inject({
     method: 'POST',
     url: '/auth/login',
@@ -150,18 +276,15 @@ test('POST /auth/login returns a JWT for valid credentials', async () => {
 });
 
 test('POST /auth/login rejects invalid credentials', async () => {
-  const userRepository = new InMemoryUserRepository();
+  const { app, userRepository } = await createAppWithRepositories({
+    jwtSecret: 'test-secret',
+  });
   await userRepository.create({
     name: 'Maria Silva',
     email: 'maria@example.com',
     passwordHash: hashPassword('123456'),
     role: 'student',
   });
-  const app = await buildApp({
-    userRepository,
-    jwtSecret: 'test-secret',
-  });
-
   const response = await app.inject({
     method: 'POST',
     url: '/auth/login',
@@ -180,9 +303,7 @@ test('POST /auth/login rejects invalid credentials', async () => {
 });
 
 test('GET /profile requires authentication', async () => {
-  const userRepository = new InMemoryUserRepository();
-  const app = await buildApp({
-    userRepository,
+  const { app } = await createAppWithRepositories({
     jwtSecret: 'test-secret',
   });
 
@@ -200,7 +321,9 @@ test('GET /profile requires authentication', async () => {
 });
 
 test('GET /instructors returns available instructors for authenticated users', async () => {
-  const userRepository = new InMemoryUserRepository();
+  const { app, userRepository } = await createAppWithRepositories({
+    jwtSecret: 'test-secret',
+  });
   await userRepository.create({
     name: 'Ana Instrutora',
     email: 'ana@example.com',
@@ -218,11 +341,6 @@ test('GET /instructors returns available instructors for authenticated users', a
     email: 'carlos@example.com',
     passwordHash: hashPassword('123456'),
     role: 'student',
-  });
-
-  const app = await buildApp({
-    userRepository,
-    jwtSecret: 'test-secret',
   });
 
   const loginResponse = await app.inject({
@@ -258,9 +376,7 @@ test('GET /instructors returns available instructors for authenticated users', a
 });
 
 test('GET /instructors requires authentication', async () => {
-  const userRepository = new InMemoryUserRepository();
-  const app = await buildApp({
-    userRepository,
+  const { app } = await createAppWithRepositories({
     jwtSecret: 'test-secret',
   });
 
@@ -273,6 +389,158 @@ test('GET /instructors requires authentication', async () => {
   assert.deepEqual(response.json(), {
     message: 'Unauthorized.',
   });
+
+  await app.close();
+});
+
+test('POST /appointments allows student to create a valid appointment', async () => {
+  const { app, userRepository } = await createAppWithRepositories({
+    jwtSecret: 'test-secret',
+  });
+  const instructor = await userRepository.create({
+    name: 'Instrutora Ana',
+    email: 'instrutora.ana@example.com',
+    passwordHash: hashPassword('123456'),
+    role: 'instructor',
+  });
+  await userRepository.create({
+    name: 'Aluno Pedro',
+    email: 'aluno.pedro@example.com',
+    passwordHash: hashPassword('123456'),
+    role: 'student',
+  });
+
+  const loginResponse = await app.inject({
+    method: 'POST',
+    url: '/auth/login',
+    payload: {
+      email: 'aluno.pedro@example.com',
+      password: '123456',
+    },
+  });
+
+  const futureDate = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+  const response = await app.inject({
+    method: 'POST',
+    url: '/appointments',
+    headers: {
+      authorization: `Bearer ${loginResponse.json().token}`,
+    },
+    payload: {
+      instructorId: instructor.id,
+      scheduledAt: futureDate,
+      notes: 'Aula de baliza',
+    },
+  });
+
+  assert.equal(response.statusCode, 201);
+  assert.equal(response.json().instructorId, instructor.id);
+  assert.equal(response.json().status, 'pending');
+
+  await app.close();
+});
+
+test('POST /appointments blocks creation for instructors', async () => {
+  const { app, userRepository } = await createAppWithRepositories({
+    jwtSecret: 'test-secret',
+  });
+  await userRepository.create({
+    name: 'Instrutor Bruno',
+    email: 'instrutor.bruno@example.com',
+    passwordHash: hashPassword('123456'),
+    role: 'instructor',
+  });
+
+  const loginResponse = await app.inject({
+    method: 'POST',
+    url: '/auth/login',
+    payload: {
+      email: 'instrutor.bruno@example.com',
+      password: '123456',
+    },
+  });
+
+  const response = await app.inject({
+    method: 'POST',
+    url: '/appointments',
+    headers: {
+      authorization: `Bearer ${loginResponse.json().token}`,
+    },
+    payload: {
+      instructorId: 1,
+      scheduledAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+    },
+  });
+
+  assert.equal(response.statusCode, 403);
+  assert.deepEqual(response.json(), {
+    message: 'Somente alunos podem criar agendamentos.',
+  });
+
+  await app.close();
+});
+
+test('PATCH /appointments/:id/status lets instructor confirm own appointment', async () => {
+  const { app, userRepository } = await createAppWithRepositories({
+    jwtSecret: 'test-secret',
+  });
+  const instructor = await userRepository.create({
+    name: 'Instrutora Cida',
+    email: 'instrutora.cida@example.com',
+    passwordHash: hashPassword('123456'),
+    role: 'instructor',
+  });
+  await userRepository.create({
+    name: 'Aluno Lucas',
+    email: 'aluno.lucas@example.com',
+    passwordHash: hashPassword('123456'),
+    role: 'student',
+  });
+
+  const studentLogin = await app.inject({
+    method: 'POST',
+    url: '/auth/login',
+    payload: {
+      email: 'aluno.lucas@example.com',
+      password: '123456',
+    },
+  });
+
+  const createResponse = await app.inject({
+    method: 'POST',
+    url: '/appointments',
+    headers: {
+      authorization: `Bearer ${studentLogin.json().token}`,
+    },
+    payload: {
+      instructorId: instructor.id,
+      scheduledAt: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+    },
+  });
+
+  const instructorLogin = await app.inject({
+    method: 'POST',
+    url: '/auth/login',
+    payload: {
+      email: 'instrutora.cida@example.com',
+      password: '123456',
+    },
+  });
+
+  const appointmentId = createResponse.json().id;
+  const patchResponse = await app.inject({
+    method: 'PATCH',
+    url: `/appointments/${appointmentId}/status`,
+    headers: {
+      authorization: `Bearer ${instructorLogin.json().token}`,
+    },
+    payload: {
+      status: 'confirmed' as AppointmentStatus,
+    },
+  });
+
+  assert.equal(patchResponse.statusCode, 200);
+  assert.equal(patchResponse.json().status, 'confirmed');
 
   await app.close();
 });

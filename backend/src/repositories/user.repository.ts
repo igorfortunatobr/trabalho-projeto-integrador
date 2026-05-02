@@ -23,6 +23,7 @@ export interface InstructorListItem {
 
 export interface UserRepository {
   create(data: CreateUserData): Promise<User>;
+  findById(id: number): Promise<User | null>;
   findByEmail(email: string): Promise<User | null>;
   listInstructors(): Promise<InstructorListItem[]>;
 }
@@ -107,6 +108,21 @@ export class MySqlUserRepository implements UserRepository {
         LIMIT 1
       `,
       [email],
+    );
+
+    const user = rows[0];
+    return user ? mapUserRow(user) : null;
+  }
+
+  async findById(id: number): Promise<User | null> {
+    const [rows] = await this.pool.execute<UserRow[]>(
+      `
+        SELECT id, name, email, password_hash, discriminator, created_at
+        FROM users
+        WHERE id = ?
+        LIMIT 1
+      `,
+      [id],
     );
 
     const user = rows[0];
