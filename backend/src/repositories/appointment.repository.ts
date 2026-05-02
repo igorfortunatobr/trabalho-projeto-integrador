@@ -40,6 +40,7 @@ export interface AppointmentRepository {
   ensureSchema(): Promise<void>;
   create(data: CreateAppointmentData): Promise<Appointment>;
   findById(id: number): Promise<AppointmentWithNames | null>;
+  findNextByStudent(studentId: number, referenceDate: Date): Promise<AppointmentWithNames | null>;
   listByStudent(studentId: number): Promise<AppointmentWithNames[]>;
   listByInstructor(instructorId: number): Promise<AppointmentWithNames[]>;
   listForInstructorOnDate(
@@ -132,6 +133,29 @@ export class MySqlAppointmentRepository implements AppointmentRepository {
         LIMIT 1
       `,
       [id],
+    );
+
+    const appointment = rows[0];
+    return appointment ? mapAppointmentRow(appointment) : null;
+  }
+
+  async findNextByStudent(
+    studentId: number,
+    referenceDate: Date,
+  ): Promise<AppointmentWithNames | null> {
+    const [rows] = await this.pool.execute<AppointmentRow[]>(
+      `
+        SELECT a.id, a.student_id, a.instructor_id, a.scheduled_at, a.status, a.notes, a.cancellation_reason, a.created_at, a.updated_at, s.name as student_name, i.name as instructor_name
+        FROM appointments a
+        INNER JOIN users s ON s.id = a.student_id
+        INNER JOIN users i ON i.id = a.instructor_id
+        WHERE a.student_id = ?
+          AND a.scheduled_at > ?
+          AND a.status IN ('pending', 'confirmed')
+        ORDER BY a.scheduled_at ASC
+        LIMIT 1
+      `,
+      [studentId, referenceDate],
     );
 
     const appointment = rows[0];

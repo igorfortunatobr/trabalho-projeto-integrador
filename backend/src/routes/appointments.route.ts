@@ -6,11 +6,17 @@ import {
   AppointmentStatus,
 } from '../repositories/appointment.repository';
 import { UserRepository } from '../repositories/user.repository';
+import {
+  AppointmentReminderQueue,
+  removeAppointmentReminderJobs,
+  scheduleAppointmentReminderJobs,
+} from '../queues/appointment-reminder.queue';
 
 type RegisterAppointmentsRoutesOptions = {
   jwtSecret: string;
   userRepository: UserRepository;
   appointmentRepository: AppointmentRepository;
+  appointmentReminderQueue?: AppointmentReminderQueue;
 };
 
 type CreateAppointmentBody = {
@@ -29,6 +35,11 @@ const INSTRUCTOR_ALLOWED_STATUS: AppointmentStatus[] = [
   'confirmed',
   'rejected',
   'cancelled',
+  'completed',
+];
+const STATUS_WITHOUT_PENDING_REMINDERS: AppointmentStatus[] = [
+  'cancelled',
+  'rejected',
   'completed',
 ];
 
@@ -67,6 +78,36 @@ export async function registerAppointmentsRoutes(
         notes: appointment.notes,
         cancellationReason: appointment.cancellationReason,
       }));
+    },
+  );
+
+  fastify.get(
+    '/appointments/next',
+    { preHandler: authenticateRequest },
+    async (request) => {
+      const authenticatedRequest = request as typeof request & AuthenticatedRequest;
+      const userId = Number(authenticatedRequest.user.sub);
+
+      if (authenticatedRequest.user.role !== 'student') {
+        return { nextAppointment: null };
+      }
+
+      const appointment = await options.appointmentRepository.findNextByStudent(
+        userId,
+        new Date(),
+      );
+
+      return {
+        nextAppointment: appointment
+          ? {
+              id: appointment.id,
+              instructorId: appointment.instructorId,
+              instructorName: appointment.instructorName,
+              scheduledAt: appointment.scheduledAt.toISOString(),
+              status: appointment.status,
+            }
+          : null,
+      };
     },
   );
 
@@ -206,6 +247,17 @@ export async function registerAppointmentsRoutes(
             },
       );
 
+      if (options.appointmentReminderQueue) {
+        try {
+          await scheduleAppointmentReminderJobs(
+            options.appointmentReminderQueue,
+            created,
+          );
+        } catch (error) {
+          request.log.error({ err: error }, 'Failed to schedule appointment reminders.');
+        }
+      }
+
       return reply.status(201).send({
         id: created.id,
         studentId: created.studentId,
@@ -279,6 +331,20 @@ export async function registerAppointmentsRoutes(
         return reply.status(404).send({
           message: 'Agendamento não encontrado.',
         });
+      }
+
+      if (
+        options.appointmentReminderQueue &&
+        STATUS_WITHOUT_PENDING_REMINDERS.includes(updated.status)
+      ) {
+        try {
+          await removeAppointmentReminderJobs(
+            options.appointmentReminderQueue,
+            updated.id,
+          );
+        } catch (error) {
+          request.log.error({ err: error }, 'Failed to remove appointment reminders.');
+        }
       }
 
       return {

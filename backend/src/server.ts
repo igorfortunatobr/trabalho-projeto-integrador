@@ -1,8 +1,10 @@
 import dotenv from 'dotenv';
 import mysql from 'mysql2/promise';
-import { Redis } from 'ioredis';
 import { buildApp } from './app';
+import { createAppointmentReminderQueue } from './queues/appointment-reminder.queue';
+import { createRedisConnection } from './queues/redis-connection';
 import { MySqlAppointmentRepository } from './repositories/appointment.repository';
+import { MySqlNotificationRepository } from './repositories/notification.repository';
 import { MySqlUserRepository } from './repositories/user.repository';
 
 dotenv.config();
@@ -13,12 +15,10 @@ const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3333;
 // Prepare connections (Optional check on boot)
 async function start() {
   try {
-    // Basic Redis connection readiness print
-    const redis = new Redis({
-      host: process.env.REDIS_HOST || '127.0.0.1',
-      port: process.env.REDIS_PORT ? parseInt(process.env.REDIS_PORT) : 6379,
-    });
-    
+    const redis = createRedisConnection();
+    await redis.ping();
+    const appointmentReminderQueue = createAppointmentReminderQueue(redis);
+
     // Basic MySQL connection test
     const mysqlPool = mysql.createPool({
       host: process.env.DB_HOST || 'localhost',
@@ -32,17 +32,23 @@ async function start() {
     await userRepository.ensureSchema();
     const appointmentRepository = new MySqlAppointmentRepository(mysqlPool);
     await appointmentRepository.ensureSchema();
+    const notificationRepository = new MySqlNotificationRepository(mysqlPool);
+    await notificationRepository.ensureSchema();
 
     const fastify = await buildApp({
       userRepository,
       appointmentRepository,
+      appointmentReminderQueue,
     });
 
-    redis.on('connect', () => {
-      fastify.log.info('Redis connected (preparado)');
-    });
-
+    fastify.log.info('Redis connected for appointment reminder queue.');
     fastify.log.info('MySQL connected (preparado)');
+
+    fastify.addHook('onClose', async () => {
+      await appointmentReminderQueue.close();
+      await redis.quit();
+      await mysqlPool.end();
+    });
 
     await fastify.listen({ port: PORT, host: '0.0.0.0' });
     fastify.log.info(`Server listening on http://0.0.0.0:${PORT}`);

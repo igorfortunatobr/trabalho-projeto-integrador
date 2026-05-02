@@ -8,11 +8,13 @@ import { registerProfileRoutes } from './routes/profile.route';
 import { registerUserRoutes } from './routes/users.route';
 import { AppointmentRepository } from './repositories/appointment.repository';
 import { UserRepository } from './repositories/user.repository';
+import { AppointmentReminderQueue } from './queues/appointment-reminder.queue';
 
 type BuildAppOptions = {
   userRepository: UserRepository;
   appointmentRepository: AppointmentRepository;
   jwtSecret?: string;
+  appointmentReminderQueue?: AppointmentReminderQueue;
 };
 
 export async function buildApp(options: BuildAppOptions) {
@@ -36,11 +38,21 @@ export async function buildApp(options: BuildAppOptions) {
     jwtSecret,
     userRepository: options.userRepository,
   });
-  await registerAppointmentsRoutes(fastify, {
-    jwtSecret,
-    userRepository: options.userRepository,
-    appointmentRepository: options.appointmentRepository,
-  });
+  await registerAppointmentsRoutes(
+    fastify,
+    options.appointmentReminderQueue
+      ? {
+          jwtSecret,
+          userRepository: options.userRepository,
+          appointmentRepository: options.appointmentRepository,
+          appointmentReminderQueue: options.appointmentReminderQueue,
+        }
+      : {
+          jwtSecret,
+          userRepository: options.userRepository,
+          appointmentRepository: options.appointmentRepository,
+        },
+  );
   await registerUserRoutes(fastify, {
     userRepository: options.userRepository,
   });
