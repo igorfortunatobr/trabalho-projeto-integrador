@@ -92,6 +92,22 @@ class InMemoryAppointmentRepository implements AppointmentRepository {
     return this.mapWithNames(appointment);
   }
 
+  async findNextByStudent(
+    studentId: number,
+    referenceDate: Date,
+  ): Promise<AppointmentWithNames | null> {
+    const appointment = this.appointments
+      .filter(
+        (item) =>
+          item.studentId === studentId &&
+          item.scheduledAt > referenceDate &&
+          ['pending', 'confirmed'].includes(item.status),
+      )
+      .sort((first, second) => first.scheduledAt.getTime() - second.scheduledAt.getTime())[0];
+
+    return appointment ? this.mapWithNames(appointment) : null;
+  }
+
   async listByStudent(studentId: number): Promise<AppointmentWithNames[]> {
     return this.appointments
       .filter((appointment) => appointment.studentId === studentId)

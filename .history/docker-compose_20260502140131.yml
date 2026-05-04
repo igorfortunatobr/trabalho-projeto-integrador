@@ -26,28 +26,6 @@ services:
     networks:
       - autecno_network
 
-  worker:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: autecno_worker
-    command: npm run worker
-    environment:
-      - DB_HOST=mysql
-      - DB_USER=root
-      - DB_PASSWORD=root
-      - DB_NAME=autecno
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-    depends_on:
-      - mysql
-      - redis
-    volumes:
-      - ./backend:/app
-      - /app/node_modules
-    networks:
-      - autecno_network
-
   frontend:
     build:
       context: ./frontend

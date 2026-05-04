@@ -39,6 +39,14 @@ type Appointment = {
   cancellationReason: string | null;
 };
 
+type NextAppointment = {
+  id: number;
+  instructorId: number;
+  instructorName: string;
+  scheduledAt: string;
+  status: AppointmentStatus;
+} | null;
+
 type AvailabilitySlot = {
   scheduledAt: string;
   available: boolean;
@@ -49,6 +57,7 @@ export default function DashboardPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [instructors, setInstructors] = useState<Instructor[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [nextAppointment, setNextAppointment] = useState<NextAppointment>(null);
   const [isLoading, setIsLoading] = useState(Boolean(token));
   const [error, setError] = useState<string | null>(
     token ? null : "Sessão inválida. Faça login novamente.",
@@ -71,7 +80,12 @@ export default function DashboardPage() {
       setError(null);
 
       try {
-        const [profileResponse, instructorsResponse, appointmentsResponse] =
+        const [
+          profileResponse,
+          instructorsResponse,
+          appointmentsResponse,
+          nextAppointmentResponse,
+        ] =
           await Promise.all([
           fetch(`${getApiUrl()}/profile`, {
             headers: {
@@ -84,6 +98,11 @@ export default function DashboardPage() {
             },
           }),
           fetch(`${getApiUrl()}/appointments`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }),
+          fetch(`${getApiUrl()}/appointments/next`, {
             headers: {
               Authorization: `Bearer ${token}`,
             },
@@ -115,6 +134,14 @@ export default function DashboardPage() {
           );
         }
         setAppointments(appointmentsPayload);
+
+        const nextAppointmentPayload = await nextAppointmentResponse.json();
+        if (!nextAppointmentResponse.ok) {
+          throw new Error(
+            nextAppointmentPayload.message || "Não foi possível carregar a próxima aula.",
+          );
+        }
+        setNextAppointment(nextAppointmentPayload.nextAppointment ?? null);
       } catch (err) {
         setError(
           err instanceof Error ? err.message : "Falha ao carregar os dados do dashboard.",
@@ -165,6 +192,20 @@ export default function DashboardPage() {
       throw new Error(payload.message || "Não foi possível atualizar agendamentos.");
     }
     setAppointments(payload);
+  };
+
+  const refreshNextAppointment = async () => {
+    if (!token) return;
+    const response = await fetch(`${getApiUrl()}/appointments/next`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.message || "Não foi possível atualizar a próxima aula.");
+    }
+    setNextAppointment(payload.nextAppointment ?? null);
   };
 
   const loadAvailability = async (instructorId: number, date: string) => {
@@ -219,6 +260,7 @@ export default function DashboardPage() {
 
       setActionMessage("Agendamento realizado com sucesso.");
       await refreshAppointments();
+      await refreshNextAppointment();
       if (selectedDate) {
         await loadAvailability(selectedInstructorId, selectedDate);
       }
@@ -257,6 +299,7 @@ export default function DashboardPage() {
 
       setActionMessage("Status atualizado com sucesso.");
       await refreshAppointments();
+      await refreshNextAppointment();
     } catch (err) {
       setActionMessage(
         err instanceof Error ? err.message : "Falha ao atualizar status.",
@@ -280,6 +323,26 @@ export default function DashboardPage() {
             </p>
           </div>
         </Card>
+
+        {isStudent && (
+          <Card className="space-y-3">
+            <Badge>Próxima aula</Badge>
+            {nextAppointment ? (
+              <div className="space-y-1">
+                <h2 className="text-2xl font-bold text-[var(--brand-blue)]">
+                  {formatDateTime(nextAppointment.scheduledAt)}
+                </h2>
+                <p className="text-sm leading-6 text-slate-600">
+                  Aula com {nextAppointment.instructorName}.
+                </p>
+              </div>
+            ) : (
+              <p className="text-sm leading-6 text-slate-600">
+                Você ainda não tem uma próxima aula agendada.
+              </p>
+            )}
+          </Card>
+        )}
 
         {isStudent && (
           <Card className="space-y-5">
